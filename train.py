@@ -211,7 +211,13 @@ def main():
     df = pd.DataFrame(history_all)
     csv_path = f"results/loss_{args.model}.csv"
     df.to_csv(csv_path, index=False)
+    
+    # Save model weights checkpoint
+    checkpoint_path = f"results/model_{args.model}.pt"
+    torch.save(model.state_dict(), checkpoint_path)
+    
     print(f"Training complete. Saved loss logs to {csv_path}")
+    print(f"Saved model checkpoint to {checkpoint_path}")
     
     if wandb_active:
         wandb.finish()
