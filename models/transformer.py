@@ -15,21 +15,27 @@ class RMSNorm(nn.Module):
 
 class RotaryEmbedding(nn.Module):
     """Rotary Position Embedding (RoPE) for causal self-attention."""
-    def __init__(self, dim, max_seq_len=8192, theta=10000.0):
+    def __init__(self, dim, max_seq_len=32768, theta=10000.0):
         super().__init__()
         self.dim = dim
         self.max_seq_len = max_seq_len
-        
-        inv_freq = 1.0 / (theta ** (torch.arange(0, dim, 2).float() / dim))
+        self.theta = theta
+        self._build_cache(max_seq_len)
+
+    def _build_cache(self, seq_len):
+        self.max_seq_len = seq_len
+        inv_freq = 1.0 / (self.theta ** (torch.arange(0, self.dim, 2).float() / self.dim))
         self.register_buffer("inv_freq", inv_freq, persistent=False)
         
-        t = torch.arange(max_seq_len, dtype=torch.float32)
+        t = torch.arange(seq_len, dtype=torch.float32)
         freqs = torch.outer(t, self.inv_freq)
         emb = torch.cat((freqs, freqs), dim=-1)
         self.register_buffer("cos_cached", emb.cos(), persistent=False)
         self.register_buffer("sin_cached", emb.sin(), persistent=False)
 
     def forward(self, x, seq_len):
+        if seq_len > self.max_seq_len:
+            self._build_cache(seq_len)
         return self.cos_cached[:seq_len].to(x.device), self.sin_cached[:seq_len].to(x.device)
 
 def rotate_half(x):
