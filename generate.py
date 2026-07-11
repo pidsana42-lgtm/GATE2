@@ -69,9 +69,18 @@ def main():
         print(f"Error: Checkpoint file '{checkpoint_path}' not found. Please train the model first.")
         return
 
-    print(f"Loading weights from {checkpoint_path}...")
-    model.load_state_dict(torch.load(checkpoint_path, map_location=device))
     model.to(device)
+
+    # Pre-instantiate FLA layers if using FLA, so they exist in model.state_dict()
+    if args.model == "hybrid" and args.use_fla:
+        print("Pre-instantiating FLA layers for state_dict matching...")
+        dummy_x = torch.zeros(1, 10, args.hidden_size, device=device)
+        with torch.no_grad():
+            model(dummy_x, use_fla=True)
+
+    print(f"Loading weights from {checkpoint_path}...")
+    # Use strict=False to gracefully load model parameters regardless of dynamic submodules
+    model.load_state_dict(torch.load(checkpoint_path, map_location=device), strict=False)
     model.eval()
 
     # 4. Run autoregressive generation loop
