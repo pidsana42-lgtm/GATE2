@@ -143,7 +143,10 @@ class GatedDeltaNet2Attention(nn.Module):
                         num_heads=self.num_heads,
                         mode='chunk'
                     ).to(x.device).to(x.dtype)
-                return self.fla_layer(x)
+                res = self.fla_layer(x)
+                if isinstance(res, tuple):
+                    return res[0]
+                return res
             except Exception as e:
                 # If FLA fails or is not installed, fallback gracefully to PyTorch
                 pass
