@@ -28,10 +28,13 @@ def main():
                         help="Number of attention heads")
     parser.add_argument("--use_fla", action="store_true", 
                         help="Enable Flash Linear Attention Triton kernels for Hybrid model")
+    parser.add_argument("--inference", action="store_true",
+                        help="Run benchmark in inference mode (disables gradient calculation/backward pass)")
     args = parser.parse_args()
 
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
-    print(f"Benchmarking model: {args.model.upper()} on device: {device}")
+    mode_name = "INFERENCE (no_grad)" if args.inference else "TRAINING (with grad)"
+    print(f"Benchmarking model: {args.model.upper()} in {mode_name} mode on device: {device}")
     
     seq_lengths = [int(x.strip()) for x in args.lengths.split(",")]
     
@@ -82,7 +85,15 @@ def main():
         print(f"\nRunning throughput benchmark for {model_name}...")
         for length in seq_lengths:
             print(f"  Sequence Length = {length}...")
-            speed = benchmark_throughput(model, args.batch_size, length, vocab_size, device, use_fla=args.use_fla)
+            speed = benchmark_throughput(
+                model=model, 
+                batch_size=args.batch_size, 
+                seq_len=length, 
+                vocab_size=vocab_size, 
+                device=device, 
+                use_fla=args.use_fla,
+                inference=args.inference
+            )
             print(f"    Throughput: {speed if isinstance(speed, str) else f'{speed:.2f} tokens/sec'}")
             results.append({
                 "sequence_length": length,
@@ -90,17 +101,23 @@ def main():
             })
     else:
         print("\nCUDA is not available. Generating simulated speed data for local testing...")
-        # Simulated data representing speed drops:
-        # Transformer: drops quadratically as sequence length grows
-        # Hybrid GDN-2: remains high and stable (linear time)
+        # Simulated data representing speed drops
         for length in seq_lengths:
-            if args.model == "transformer":
-                if length >= 6144:
-                    speed = "OOM"
+            if args.inference:
+                # Speed is much higher in inference
+                if args.model == "transformer":
+                    speed = max(100.0, 8000.0 - (length / 1024) ** 2 * 120)
                 else:
-                    speed = max(100.0, 3500.0 - (length / 1024) ** 1.8 * 300)
+                    speed = max(5000.0, 9500.0 - (length / 1024) * 50)
             else:
-                speed = max(1800.0, 2800.0 - (length / 1024) * 80)
+                # Training
+                if args.model == "transformer":
+                    if length >= 6144:
+                        speed = "OOM"
+                    else:
+                        speed = max(100.0, 3500.0 - (length / 1024) ** 1.8 * 300)
+                else:
+                    speed = max(1800.0, 2800.0 - (length / 1024) * 80)
                 
             results.append({
                 "sequence_length": length,

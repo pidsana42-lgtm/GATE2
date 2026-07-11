@@ -28,10 +28,13 @@ def main():
                         help="Number of attention heads")
     parser.add_argument("--use_fla", action="store_true", 
                         help="Enable Flash Linear Attention Triton kernels for Hybrid model")
+    parser.add_argument("--inference", action="store_true",
+                        help="Run benchmark in inference mode (disables gradient calculation/backward pass)")
     args = parser.parse_args()
 
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
-    print(f"Benchmarking model: {args.model.upper()} on device: {device}")
+    mode_name = "INFERENCE (no_grad)" if args.inference else "TRAINING (with grad)"
+    print(f"Benchmarking model: {args.model.upper()} in {mode_name} mode on device: {device}")
     
     seq_lengths = [int(x.strip()) for x in args.lengths.split(",")]
     
@@ -82,7 +85,15 @@ def main():
         print(f"\nRunning actual benchmark for {model_name}...")
         for length in seq_lengths:
             print(f"  Sequence Length = {length}...")
-            vram = benchmark_memory(model, args.batch_size, length, vocab_size, device, use_fla=args.use_fla)
+            vram = benchmark_memory(
+                model=model, 
+                batch_size=args.batch_size, 
+                seq_len=length, 
+                vocab_size=vocab_size, 
+                device=device, 
+                use_fla=args.use_fla,
+                inference=args.inference
+            )
             print(f"    VRAM Peak: {vram if isinstance(vram, str) else f'{vram:.1f} MB'}")
             results.append({
                 "sequence_length": length,
@@ -92,21 +103,29 @@ def main():
         print("\nCUDA is not available. Generating simulated data for local testing...")
         # Simulated data for CPU/Mac testing
         for length in seq_lengths:
-            if args.model == "transformer":
-                # Quadratic growth simulation
-                vram = (length / 1024) ** 2 * 1200 + 1300
-                if length >= 6144:
-                    vram = "OOM"
+            if args.inference:
+                # Inference mode VRAM is flat and lower
+                if args.model == "transformer":
+                    vram = (length / 1024) ** 2 * 120 + 800
+                    if length >= 16384: # Higher limit in inference
+                        vram = "OOM"
+                else:
+                    vram = 900.0 # completely flat for hybrid in inference!
             else:
-                # Linear/flat growth simulation
-                vram = (length / 1024) * 500 + 1300
+                # Training mode (default)
+                if args.model == "transformer":
+                    vram = (length / 1024) ** 2 * 1200 + 1300
+                    if length >= 6144:
+                        vram = "OOM"
+                else:
+                    vram = (length / 1024) * 500 + 1300
             
             results.append({
                 "sequence_length": length,
                 f"{args.model}_vram_mb": vram
             })
             
-    # Save results to a separate CSV per model to avoid file write locks on dual GPU runs
+    # Save results to a separate CSV per model
     os.makedirs("results", exist_ok=True)
     df = pd.DataFrame(results)
     csv_path = f"results/vram_{args.model}.csv"
