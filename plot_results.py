@@ -37,7 +37,7 @@ def plot_vram():
     x_labels = [format_length(v) for v in x]
     
     y_trans = df["transformer_vram_mb"].values
-    y_hybrid = df["hybrid_gdn2_vram_mb"].values
+    y_hybrid = df["hybrid_vram_mb"].values
     
     # Process Transformer VRAM (handle OOM)
     y_trans_numeric = []
@@ -99,7 +99,8 @@ def plot_speed():
     
     # Process numeric values
     y_trans = [float(v) if str(v).strip().upper() != "OOM" else 0.0 for v in df["transformer_speed_tok_per_sec"]]
-    y_hybrid = [float(v) if str(v).strip().upper() != "OOM" else 0.0 for v in df["hybrid_speed_tok_per_sec"]]
+    y_hybrid_col = [c for c in df.columns if c != "sequence_length" and "hybrid" in c.lower()][0]
+    y_hybrid = [float(v) if str(v).strip().upper() != "OOM" else 0.0 for v in df[y_hybrid_col]]
     
     # Plot lines
     ax.plot(x, y_hybrid, marker='o', linewidth=3, color='#009688', label='Model B: Hybrid Gated DeltaNet-2', markersize=8)
@@ -113,7 +114,7 @@ def plot_speed():
         if v == 0.0:
             ax.text(x[idx], 100, '  OOM 💥', color='#E63946', weight='bold', horizontalalignment='center')
             
-    ax.set_title("Training Throughput vs Context Length", pad=15)
+    ax.set_title("Inference Throughput vs Context Length (Batch Size = 2, no_grad)", pad=15)
     ax.set_xlabel("Sequence Length (Context Length)")
     ax.set_ylabel("Throughput (Tokens per Second)")
     ax.set_xticks(x)
