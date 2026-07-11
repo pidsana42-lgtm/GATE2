@@ -26,19 +26,13 @@ class CausalConv1d(nn.Module):
         x = x[..., :-(self.kernel_size - 1)]
         return x.transpose(1, 2)
 
-def gated_deltanet2_pytorch(q, k, v, b, w, alpha):
+def gated_deltanet2_pytorch(q, k, v, b, w, alpha, chunk_size=64):
     r"""
     Decoupled Gated DeltaNet-2 recurrent state update:
     S_t = (I - k_t (b_t \odot k_t)^T) D_t S_{t-1} + k_t (w_t \odot v_t)^T
     y_t = q_t S_t
     
-    Shapes:
-        q: [B, H, L, d_k]
-        k: [B, H, L, d_k]
-        v: [B, H, L, d_v]
-        b: [B, H, L, d_k]     (erase gate)
-        w: [B, H, L, d_v]     (write gate)
-        alpha: [B, H, L, d_k] (decay gate)
+    Uses chunked gradient checkpointing to keep VRAM usage low during training.
     """
     B, H, L, d_k = q.shape
     d_v = v.shape[-1]
@@ -47,35 +41,55 @@ def gated_deltanet2_pytorch(q, k, v, b, w, alpha):
     S = torch.zeros(B, H, d_k, d_v, device=q.device, dtype=q.dtype)
     outputs = []
     
-    for t in range(L):
-        q_t = q[:, :, t]         # [B, H, d_k]
-        k_t = k[:, :, t]         # [B, H, d_k]
-        v_t = v[:, :, t]         # [B, H, d_v]
-        b_t = b[:, :, t]         # [B, H, d_k]
-        w_t = w[:, :, t]         # [B, H, d_v]
-        alpha_t = alpha[:, :, t] # [B, H, d_k]
+    def chunk_forward(S_prev, q_c, k_c, v_c, b_c, w_c, alpha_c):
+        S_curr = S_prev
+        y_c = []
+        for t in range(q_c.shape[2]):
+            q_t = q_c[:, :, t]
+            k_t = k_c[:, :, t]
+            v_t = v_c[:, :, t]
+            b_t = b_c[:, :, t]
+            w_t = w_c[:, :, t]
+            alpha_t = alpha_c[:, :, t]
+            
+            S_decayed = alpha_t.unsqueeze(-1) * S_curr
+            u_t = b_t * k_t
+            p_t = torch.einsum('bhkd,bhk->bhd', S_decayed, u_t)
+            
+            erase_term = k_t.unsqueeze(-1) * p_t.unsqueeze(-2)
+            write_term = k_t.unsqueeze(-1) * (w_t * v_t).unsqueeze(-2)
+            
+            S_curr = S_decayed - erase_term + write_term
+            y_t = torch.einsum('bhk,bhkd->bhd', q_t, S_curr)
+            y_c.append(y_t)
+            
+        y_c = torch.stack(y_c, dim=2)
+        return S_curr, y_c
+
+    # Process in chunks using PyTorch Gradient Checkpointing
+    from torch.utils.checkpoint import checkpoint
+    
+    for i in range(0, L, chunk_size):
+        q_chunk = q[:, :, i:i+chunk_size]
+        k_chunk = k[:, :, i:i+chunk_size]
+        v_chunk = v[:, :, i:i+chunk_size]
+        b_chunk = b[:, :, i:i+chunk_size]
+        w_chunk = w[:, :, i:i+chunk_size]
+        alpha_chunk = alpha[:, :, i:i+chunk_size]
         
-        # Apply decay to the state (channel-wise key-side decay)
-        S_decayed = alpha_t.unsqueeze(-1) * S # [B, H, d_k, d_v]
+        if S.requires_grad:
+            # use_reentrant=False is the modern and recommended checkpointing mode
+            S, y_chunk = checkpoint(
+                chunk_forward,
+                S, q_chunk, k_chunk, v_chunk, b_chunk, w_chunk, alpha_chunk,
+                use_reentrant=False
+            )
+        else:
+            S, y_chunk = chunk_forward(S, q_chunk, k_chunk, v_chunk, b_chunk, w_chunk, alpha_chunk)
+            
+        outputs.append(y_chunk)
         
-        # Key-side erase gate vector
-        u_t = b_t * k_t # [B, H, d_k]
-        
-        # S_decayed^T u_t -> shape [B, H, d_v]
-        p_t = torch.einsum('bhkd,bhk->bhd', S_decayed, u_t)
-        
-        # Compute erase term and write term outer products
-        erase_term = k_t.unsqueeze(-1) * p_t.unsqueeze(-2)       # [B, H, d_k, d_v]
-        write_term = k_t.unsqueeze(-1) * (w_t * v_t).unsqueeze(-2) # [B, H, d_k, d_v]
-        
-        # State update
-        S = S_decayed - erase_term + write_term
-        
-        # Causal output projection: y_t = q_t S_t
-        y_t = torch.einsum('bhk,bhkd->bhd', q_t, S)
-        outputs.append(y_t)
-        
-    outputs = torch.stack(outputs, dim=2) # [B, H, L, d_v]
+    outputs = torch.cat(outputs, dim=2) # [B, H, L, d_v]
     return outputs
 
 class GatedDeltaNet2Attention(nn.Module):
