@@ -74,7 +74,7 @@ def main():
     # Pre-instantiate FLA layers if using FLA, so they exist in model.state_dict()
     if args.model == "hybrid" and args.use_fla:
         print("Pre-instantiating FLA layers for state_dict matching...")
-        dummy_x = torch.zeros(1, 10, args.hidden_size, device=device)
+        dummy_x = torch.zeros(1, 10, dtype=torch.long, device=device)
         with torch.no_grad():
             model(dummy_x, use_fla=True)
 
