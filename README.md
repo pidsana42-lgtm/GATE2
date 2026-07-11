@@ -78,3 +78,25 @@ Pre-trained on the `pythainlp/thai-tnhc2-books` Thai historical literature datas
 
 ---
 *For a detailed walkthrough, view the notebook [experiment.ipynb](experiment.ipynb).*
+
+## Dataset & Citations
+
+This project pre-trains models on the **Thai TNHC2 Books** dataset ([pythainlp/thai-tnhc2-books](https://huggingface.co/datasets/pythainlp/thai-tnhc2-books)), which consists of 353 copyright-expired historical Thai books (CC-0).
+
+### Citations
+
+**Original Dataset Corpus:**
+> พิทยาวัฒน์ พิทยาภรณ์, มณฑล กาญจโนฬาร, สัณห์ธวัช ธัญวงษ์ และกานต์วิรุช นุชประหาร. (2566). ชุดข้อมูล TNHC2. สืบค้นเมื่อ วัน 6 มีนาคม 2567 จาก https://www.arts.chula.ac.th/chulaseal/tnhc2/
+
+**Thai TNHC2 Books Dataset (Wannaphong Phatthiyaphaibun, 2024):**
+```bibtex
+@dataset{phatthiyaphaibun_2024_10783421,
+  author       = {Phatthiyaphaibun, Wannaphong},
+  title        = {Thai TNHC2 Books},
+  month        = mar,
+  year         = 2024,
+  publisher    = {Zenodo},
+  doi          = {10.5281/zenodo.10783421},
+  url          = {https://doi.org/10.5281/zenodo.10783421}
+}
+```
