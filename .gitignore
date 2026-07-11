@@ -1,0 +1,14 @@
+# Local cached folders (downloaded dynamically in Colab/Kaggle)
+dataset/
+Tokeniz/
+
+# Experiment results
+results/
+
+# Python caching
+__pycache__/
+models/__pycache__/
+utils/__pycache__/
+
+# OS files
+.DS_Store
