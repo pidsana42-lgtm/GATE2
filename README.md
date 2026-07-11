@@ -103,4 +103,12 @@ This project pre-trains models on the **Thai TNHC2 Books** dataset ([pythainlp/t
 
 **Tokenizer (Typhoon 7B):**
 We utilize the tokenizer from [typhoon-ai/typhoon-7b](https://huggingface.co/typhoon-ai/typhoon-7b) developed by SCB 10X.
-> SCB 10X. (2024). Typhoon: Thai Large Language Models. https://huggingface.co/typhoon-ai/typhoon-7b
+```bibtex
+@article{pipatanakul2023typhoon,
+    title={Typhoon: Thai Large Language Models}, 
+    author={Kunat Pipatanakul and Phatrasek Jirabovonvisut and Potsawee Manakul and Sittipong Sripaisarnmongkol and Ruangsak Patomwong and Pathomporn Chokchainant and Kasima Tharnpipitchai},
+    year={2023},
+    journal={arXiv preprint arXiv:2312.13951},
+    url={https://arxiv.org/abs/2312.13951}
+}
+```
